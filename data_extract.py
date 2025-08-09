@@ -68,4 +68,4 @@ for zip_name in os.listdir(zip_folder):
         cap.release()
         print(f"  Saved {len(frame_numbers)} frames + masks for {case_name}")
 
-print("✅ All cases processed.")
+print("All cases processed.")
