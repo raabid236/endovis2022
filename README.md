@@ -30,6 +30,7 @@ Inference can be undertaken by executing the inference_pytorch_semantic2.py scri
 
 To execute the entire workflow (adjust arguments in the code as needed):
 - download SAR-RARP50 dataset
+- install required libraries using preferred package manager
 - run data_extract.py 
 - run resized.py
 - run endovis2022_focal.ipynb or endovis2022_pytorch_nofocal.ipynb as preferred for training
