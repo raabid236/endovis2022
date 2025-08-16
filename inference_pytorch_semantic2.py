@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Example:
+Example usage:
     python inference_segmentation_visual.py \
-        --model_ckpt ./checkpoints/best_model.pth \
+        --model_ckpt ./models/best_model.pth \
         --input_dir ./dataset/test \
         --output_dir ./predictions \
         --img-size 256 \
@@ -17,20 +17,22 @@ import numpy as np
 import torch
 import torchvision.transforms.functional as TF
 import torchvision.models.segmentation as seg_models
+import scipy.ndimage as ndi
+import cv2
 
 # -----------------------------
 # Color palette for 10 classes (0=background)
 # -----------------------------
 PALETTE = np.array([
-    [0, 0, 0],        # class 0 - background (black)
+    [0, 0, 0],        # class 0 - black:Patient
     [255, 0, 0],      # class 1 - red:Tool clasper
     [0, 255, 0],      # class 2 - green:Tool wrist
     [0, 0, 255],      # class 3 - blue:Tool shaft
-    [255, 255, 0],    # class 4 - yellow:Suturing needle bad
-    [255, 0, 255],    # class 5 - magenta:Thread bad
+    [255, 255, 0],    # class 4 - yellow:Suturing needle
+    [255, 0, 255],    # class 5 - magenta:Thread
     [0, 255, 255],    # class 6 - cyan:Suction tool
     [255, 128, 0],    # class 7 - orange:Needle Holder
-    [128, 0, 255],    # class 8 - purple:Clamps very bad
+    [128, 0, 255],    # class 8 - purple:Clamps
     [128, 128, 128],  # class 9 - gray:Catheter
 ], dtype=np.uint8)
 
@@ -46,7 +48,6 @@ def mask_to_color(mask: np.ndarray) -> Image.Image:
 
 @torch.no_grad()
 def predict_image(model, image_path, device, img_size, num_classes):
-    # Load and preprocess
     img = Image.open(image_path).convert("RGB")
     orig_size = img.size
 
@@ -80,6 +81,15 @@ def compute_miou(pred_mask, gt_mask, num_classes):
     miou = np.nanmean(per_class_ious[1:])
     return miou, per_class_ious
 
+def join_islands(mask, class_ids, kernel_size=5):
+    mask_out = mask.copy()
+    for cls in class_ids:
+        binary = (mask == cls).astype(np.uint8)
+        closed = ndi.binary_closing(binary, structure=np.ones((kernel_size, kernel_size)))
+        mask_out[binary == 1] = 0  # remove original islands
+        mask_out[closed == 1] = cls  # add joined regions
+    return mask_out
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_ckpt', type=str, required=True, help='Path to saved model checkpoint (.pth)')
@@ -102,8 +112,8 @@ def main():
 
     # Process each video
     videos = sorted([d for d in os.listdir(args.input_dir) if os.path.isdir(os.path.join(args.input_dir, d))])
-    total_miou = []
     total_class_ious = [[] for _ in range(args.num_classes)]
+
     for video in videos:
         frame_dir = os.path.join(args.input_dir, video, "frames_original")
         if not os.path.isdir(frame_dir):
@@ -116,21 +126,24 @@ def main():
 
         frame_paths = sorted(glob.glob(os.path.join(frame_dir, "*.png")))
         print(f"[{video}] Processing {len(frame_paths)} frames...")
+
+        # Store per-class IoU for this video
+        video_class_ious = [[] for _ in range(args.num_classes)]
+
         for frame_path in frame_paths:
             # Predict mask
             pred_mask = predict_image(model, frame_path, device, args.img_size, args.num_classes)
             pred_mask_np = np.array(pred_mask, dtype=np.uint8)
+            pred_mask_np = join_islands(pred_mask_np, class_ids=[5], kernel_size=7)
 
             # Save grayscale mask
-            # pred_mask.save(os.path.join(out_mask_dir, os.path.basename(frame_path)))
+            pred_mask.save(os.path.join(out_mask_dir, os.path.basename(frame_path)))
 
-            # Create overlay
-            # color_mask = mask_to_color(pred_mask_np)
-            # orig_img = Image.open(frame_path).convert("RGB")
-            # overlay = Image.blend(orig_img, color_mask, alpha=0.5)  # alpha=0.5 for 50% transparency
-
-            # Save overlay
-            # overlay.save(os.path.join(out_overlay_dir, os.path.basename(frame_path)))
+            # Create and save overlay
+            color_mask = mask_to_color(pred_mask_np)
+            orig_img = Image.open(frame_path).convert("RGB")
+            overlay = Image.blend(orig_img, color_mask, alpha=0.5)
+            overlay.save(os.path.join(out_overlay_dir, os.path.basename(frame_path)))
 
             # Read ground truth mask
             gt_mask_path = os.path.join(args.input_dir, video, "segmentation", os.path.basename(frame_path))
@@ -138,22 +151,22 @@ def main():
                 gt_mask = Image.open(gt_mask_path).convert("L")
                 gt_mask_np = np.array(gt_mask, dtype=np.uint8)
                 miou, per_class_ious = compute_miou(pred_mask_np, gt_mask_np, args.num_classes)
-                total_miou.append(miou)
                 for i, iou in enumerate(per_class_ious):
                     if not np.isnan(iou):
-                        total_class_ious[i].append(iou)
-                # print(f"{video}/{os.path.basename(frame_path)} mIoU: {miou:.4f}")
-                # print("  Per-class IoU:", ["{:.4f}".format(iou) if not np.isnan(iou) else "nan" for iou in per_class_ious])
+                        video_class_ious[i].append(iou)
             else:
                 print(f"Ground truth mask not found for {video}/{os.path.basename(frame_path)}")
 
-    if total_miou:
-        avg_miou = np.mean(total_miou)
-        avg_class_ious = [np.mean(cls_ious) if cls_ious else float('nan') for cls_ious in total_class_ious]
-        print(f"Average mIoU over all frames: {avg_miou:.4f}")
-        print("Average per-class IoU:", ["{:.4f}".format(iou) if not np.isnan(iou) else "nan" for iou in avg_class_ious])
-    else:
-        print("No ground truth masks found. Cannot compute mIoU.")
+        # Compute per-class IoU for this video
+        video_avg_class_ious = [np.mean(cls_ious) if cls_ious else float('nan') for cls_ious in video_class_ious]
+        total_class_ious = [
+            total_class_ious[i] + [video_avg_class_ious[i]] for i in range(args.num_classes)
+        ]
+        print(f"Per-class IoU for video {video}:", ["{:.4f}".format(iou) if not np.isnan(iou) else "nan" for iou in video_avg_class_ious])
+
+    # After all videos compute the mean IOUs
+    print(f"\nMean mIoU across all videos including background: {np.nanmean(total_class_ious):.4f}")
+    print(f"\nMean mIoU across all videos excluding background: {np.nanmean(total_class_ious[1:]):.4f}")
 
 if __name__ == "__main__":
     main()

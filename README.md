@@ -27,6 +27,10 @@ Inference can be undertaken by executing the inference_pytorch_semantic2.py scri
 - output_dir: folder were predictions will be stored in similar format to input
 - input_dir: folder containing test images
 - model_ckpt: path to the trained model
+- img_size: image size for training. For computational limitations, this was set to 256
+- num_classes: number of classes/labels. For this dataset, this should be 10
+- device='cuda' if torch.cuda.is_available() else 'cpu'
+
 
 To execute the entire workflow (adjust arguments in the code as needed):
 - download SAR-RARP50 dataset
