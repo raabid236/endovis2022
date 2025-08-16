@@ -4,7 +4,7 @@ import zipfile
 import tempfile
 import shutil
 
-# Paths
+# TODO: set these to your actual paths
 zip_folder = "/mnt/c/Users/raabi/Downloads/train/"  # folder containing all video_xx.zip files
 output_root = "/mnt/c/Users/raabi/Downloads/endovis2022/train/"
 
@@ -15,7 +15,7 @@ for zip_name in os.listdir(zip_folder):
     if not zip_name.endswith(".zip"):
         continue
 
-    case_name = os.path.splitext(zip_name)[0]  # e.g., video_01
+    case_name = os.path.splitext(zip_name)[0]
     print(f"Processing {case_name}...")
 
     zip_path = os.path.join(zip_folder, zip_name)
