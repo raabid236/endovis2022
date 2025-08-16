@@ -1,7 +1,7 @@
 # endovis2022
 Semantic segmentation aspect of the SAR-RARP50 challenge
 
-The code was built using python 3.11 and uses Deeplabv3_resnet50 model from torchvision achieving 0.73 miou.
+The code was built using python 3.11 and uses Deeplabv3_resnet50 model from torchvision achieving 0.73 and 0.71 miou.
 
 Training script is available as a python notebook that was used in google collab. To run the code, adjust the section starting/labelled as 'Arguments'. The parameters used for training are pre-filled in the scripts: 
 - endovis2022_focal.ipynb trains using CE and focal combined loss
@@ -20,8 +20,8 @@ The following arguments are needed:
 - device='cuda' if torch.cuda.is_available() else 'cpu'
 
 Two pretrained models are available in the models folder.
-- models/ce/best_model.pth was trained using CE loss for 15 epochs
-- models/cefocal/best_model.pth was trained using CE and focal loss for 10 epochs
+- models/ce/best_model.pth was trained using CE loss for 16 epochs
+- models/cefocal/best_model.pth was trained using CE and focal loss for 7 epochs
 
 Inference can be undertaken by executing the inference_pytorch_semantic2.py script. The script load the model and datset and saves both teh prediction maps and the overlayed masks on original image frame and computes the miou metric for the entire dataset. The following arguments are needed:
 - output_dir: folder were predictions will be stored in similar format to input
